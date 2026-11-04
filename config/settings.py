@@ -17,6 +17,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "attendance",
     "chat",
+    "accounts"
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -63,3 +64,4 @@ CSRF_COOKIE_SAMESITE = "Lax"
 DATA_UPLOAD_MAX_MEMORY_SIZE = 16 * 1024
 # A의 User.nickname 확정 전 임시 표시 필드. 이메일/로그인 ID를 대체 표시하지 않습니다.
 ROOM_NICKNAME_FIELD = "nickname"
+AUTH_USER_MODEL = "accounts.User"
