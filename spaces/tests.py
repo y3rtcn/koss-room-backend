@@ -88,4 +88,61 @@ class SpaceCreateTests(TestCase):
                 self.assertEqual(response.status_code, 400)
 
         self.assertFalse(Space.objects.exists())
-# Create your tests here.
+
+class SpaceUpdateTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="capacity-admin",
+            email="capacity-admin@kookmin.ac.kr",
+            is_staff=True,
+        )
+        self.client.force_login(self.user)
+        self.space = Space.objects.create(name="테이블 C", capacity=4)
+
+    def patch(self, data, space_id=None):
+        if space_id is None:
+            space_id = self.space.pk
+        return self.client.patch(
+            f"/api/spaces/{space_id}/",
+            data=data,
+            content_type="application/json",
+        )
+
+    def test_admin_can_update_capacity(self):
+        response = self.patch({"capacity": 6})
+
+        self.assertEqual(response.status_code, 200)
+        self.space.refresh_from_db()
+        self.assertEqual(self.space.capacity, 6)
+
+    def test_regular_member_cannot_update_capacity(self):
+        self.user.is_staff = False
+        self.user.save(update_fields=["is_staff"])
+
+        response = self.patch({"capacity": 6})
+
+        self.assertEqual(response.status_code, 403)
+        self.space.refresh_from_db()
+        self.assertEqual(self.space.capacity, 4)
+
+    def test_missing_space_returns_404(self):
+        missing_id = self.space.pk + 1
+        response = self.patch({"capacity": 6}, space_id=missing_id)
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_invalid_capacity_is_rejected(self):
+        for capacity in [0, -1, True, "4", None, 32768]:
+            with self.subTest(capacity=capacity):
+                response = self.patch({"capacity": capacity})
+                self.assertEqual(response.status_code, 400)
+
+        self.space.refresh_from_db()
+        self.assertEqual(self.space.capacity, 4)
+
+    def test_login_required(self):
+        self.client.logout()
+
+        response = self.patch({"capacity": 6})
+
+        self.assertEqual(response.status_code, 401)

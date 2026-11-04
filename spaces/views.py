@@ -50,4 +50,24 @@ def space_create(request):
         "name": space.name,
         "capacity": space.capacity,
     }, status=201)
-# Create your views here.
+
+@api(["PATCH"])
+def space_update(request, space_id):
+    if not request.user.is_staff:
+        raise ApiError("permission_denied", "관리자만 사용할 수 있습니다.", 403)
+
+    data = json_body(request)
+    capacity = data.get("capacity")
+
+    if type(capacity) is not int or not 1 <= capacity <= 32767:
+        raise ApiError("invalid_capacity", "정원은 1~32767의 정수로 입력하세요.")
+
+    updated = Space.objects.filter(pk=space_id).update(capacity=capacity)
+
+    if not updated:
+        raise ApiError("space_not_found", "공간을 찾을 수 없습니다.", 404)
+
+    return JsonResponse({
+        "id": space_id,
+        "capacity": capacity,
+    })
