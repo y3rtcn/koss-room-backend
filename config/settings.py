@@ -1,4 +1,4 @@
-"""B 앱 실행을 위한 최소 제안 설정. A와 사용자/인증/루트 URL 합의 후 통합."""
+"""KOSS ROOM A+B demo: Django sessions and one Daphne process."""
 import os
 from pathlib import Path
 
@@ -17,6 +17,9 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "attendance",
     "chat",
+    "accounts",
+    "schedules",
+    "tables",
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -44,7 +47,7 @@ if DB_ENGINE == "postgresql":
         "CONN_MAX_AGE": 0,
     }}
 elif DB_ENGINE == "sqlite" and DEBUG:
-    DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": BASE_DIR / "db.sqlite3"}}
+    DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": os.getenv("SQLITE_PATH", BASE_DIR / "db.sqlite3")}}
 else:
     raise ImproperlyConfigured("Use DB_ENGINE=postgresql outside local development")
 
@@ -61,5 +64,5 @@ CSRF_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
 DATA_UPLOAD_MAX_MEMORY_SIZE = 16 * 1024
-# A의 User.nickname 확정 전 임시 표시 필드. 이메일/로그인 ID를 대체 표시하지 않습니다.
+# accounts.nicknames.display_nickname: Profile first, legacy field fallback.
 ROOM_NICKNAME_FIELD = "nickname"

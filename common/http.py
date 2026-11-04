@@ -10,20 +10,24 @@ from django.views.decorators.cache import never_cache
 
 
 class ApiError(Exception):
-    def __init__(self, code, message, status=400):
+    def __init__(self, code, message, status=400, *, details=None):
         self.code, self.message, self.status = code, message, status
+        self.details = details
 
 
-def error_response(code, message, status):
-    return JsonResponse({"error": {"code": code, "message": message}}, status=status)
+def error_response(code, message, status, *, details=None):
+    error = {"code": code, "message": message}
+    if details is not None:
+        error["details"] = details
+    return JsonResponse({"error": error}, status=status)
 
 
-def api(methods):
+def api(methods, *, authenticated=True):
     def decorate(view):
         @never_cache
         @wraps(view)
         def wrapped(request, *args, **kwargs):
-            if not request.user.is_authenticated or not request.user.is_active:
+            if authenticated and (not request.user.is_authenticated or not request.user.is_active):
                 return error_response("authentication_required", "로그인이 필요합니다.", 401)
             if request.method not in methods:
                 response = error_response("method_not_allowed", "지원하지 않는 메서드입니다.", 405)
@@ -32,7 +36,7 @@ def api(methods):
             try:
                 return view(request, *args, **kwargs)
             except ApiError as exc:
-                return error_response(exc.code, exc.message, exc.status)
+                return error_response(exc.code, exc.message, exc.status, details=exc.details)
             except RequestDataTooBig:
                 return error_response("body_too_large", "요청 본문이 너무 큽니다.", 413)
         return wrapped
