@@ -2,3 +2,5 @@ Django==5.2.18
 channels==4.3.2
 daphne==4.2.3
 psycopg[binary]==3.3.6
+django-allauth[socialaccount]==65.21.1
+python-dotenv==1.2.4
