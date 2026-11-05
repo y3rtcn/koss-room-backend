@@ -271,3 +271,88 @@ class ScheduleUpdateTests(TestCase):
         response = self.put()
 
         self.assertEqual(response.status_code, 401)
+
+class ScheduleCancelTests(TestCase):
+    def setUp(self):
+        from django.utils.dateparse import parse_datetime
+
+        self.user = get_user_model().objects.create_user(
+            username="cancel-member",
+            email="cancel-member@kookmin.ac.kr",
+        )
+        self.client.force_login(self.user)
+        space = Space.objects.create(name="취소 테스트 공간", capacity=4)
+        self.schedule = Schedule.objects.create(
+            title="취소할 일정",
+            creator=self.user,
+            space=space,
+            starts_at=parse_datetime("2026-11-10T14:00:00+09:00"),
+            ends_at=parse_datetime("2026-11-10T15:00:00+09:00"),
+            expected_count=3,
+            purpose="공부",
+        )
+        self.url = f"/api/schedules/{self.schedule.pk}/cancel/"
+
+    def test_creator_can_cancel(self):
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["changed"])
+        self.schedule.refresh_from_db()
+        self.assertTrue(self.schedule.is_cancelled)
+        self.assertEqual(Schedule.objects.count(), 1)
+
+    def test_repeated_cancel_does_not_send_another_notification(self):
+        from unittest.mock import patch
+
+        with patch("schedules.services.notify_schedule_change") as notify:
+            first = self.client.post(self.url)
+            second = self.client.post(self.url)
+
+        self.assertEqual(first.status_code, 200)
+        self.assertTrue(first.json()["changed"])
+        self.assertEqual(second.status_code, 200)
+        self.assertFalse(second.json()["changed"])
+        notify.assert_called_once_with(
+            schedule_id=self.schedule.pk,
+            action="cancelled",
+        )
+
+    def test_other_user_cannot_cancel(self):
+        other = get_user_model().objects.create_user(
+            username="other-canceller",
+            email="other-canceller@kookmin.ac.kr",
+        )
+        self.client.force_login(other)
+
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, 403)
+        self.schedule.refresh_from_db()
+        self.assertFalse(self.schedule.is_cancelled)
+
+    def test_cancelled_schedule_is_hidden_from_list(self):
+        self.client.post(self.url)
+
+        response = self.client.get("/api/schedules/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["schedules"], [])
+
+    def test_missing_schedule_returns_404(self):
+        missing_id = self.schedule.pk + 1
+
+        response = self.client.post(
+            f"/api/schedules/{missing_id}/cancel/"
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_login_required(self):
+        self.client.logout()
+
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, 401)
+        self.schedule.refresh_from_db()
+        self.assertFalse(self.schedule.is_cancelled)

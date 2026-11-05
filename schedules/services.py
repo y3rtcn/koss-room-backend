@@ -194,3 +194,29 @@ def update_schedule(*, user, schedule_id, data):
     notify_schedule_change(schedule_id=schedule.pk, action="updated")
 
     return schedule, []
+
+@transaction.atomic
+def cancel_schedule(*, user, schedule_id):
+    try:
+        schedule = Schedule.objects.select_for_update().get(pk=schedule_id)
+    except Schedule.DoesNotExist:
+        raise ApiError("schedule_not_found", "일정을 찾을 수 없습니다.", 404)
+
+    if schedule.creator_id != user.pk:
+        raise ApiError(
+            "permission_denied",
+            "본인이 만든 일정만 취소할 수 있습니다.",
+            403,
+        )
+
+    if schedule.is_cancelled:
+        return schedule, False
+
+    Space.objects.select_for_update().get(pk=schedule.space_id)
+
+    schedule.is_cancelled = True
+    schedule.save(update_fields=["is_cancelled"])
+
+    notify_schedule_change(schedule_id=schedule.pk, action="cancelled")
+
+    return schedule, True

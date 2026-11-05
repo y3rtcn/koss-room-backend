@@ -1,7 +1,7 @@
 from django.http import JsonResponse
 
 from common.http import ApiError, api, json_body
-from .services import create_schedule, update_schedule
+from .services import create_schedule, update_schedule, cancel_schedule
 from .models import Schedule
 
 
@@ -90,4 +90,16 @@ def schedule_update(request, schedule_id):
 
     return JsonResponse({
         "schedule": schedule_data(schedule),
+    })
+
+@api(["POST"])
+def schedule_cancel(request, schedule_id):
+    schedule, changed = cancel_schedule(
+        user=request.user,
+        schedule_id=schedule_id,
+    )
+
+    return JsonResponse({
+        "schedule": schedule_data(schedule),
+        "changed": changed,
     })
