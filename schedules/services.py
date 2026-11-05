@@ -117,3 +117,80 @@ def create_schedule(*, user, data):
     )
 
     return schedule, []
+
+@transaction.atomic
+def update_schedule(*, user, schedule_id, data):
+    try:
+        schedule = Schedule.objects.select_for_update().get(pk=schedule_id)
+    except Schedule.DoesNotExist:
+        raise ApiError("schedule_not_found", "일정을 찾을 수 없습니다.", 404)
+
+    if schedule.creator_id != user.pk:
+        raise ApiError(
+            "permission_denied",
+            "본인이 만든 일정만 수정할 수 있습니다.",
+            403,
+        )
+
+    if schedule.is_cancelled:
+        raise ApiError(
+            "schedule_cancelled",
+            "취소된 일정은 수정할 수 없습니다.",
+            409,
+        )
+
+    values, confirm_overlap = validate_schedule_input(data)
+
+    space_ids = {schedule.space_id, values["space_id"]}
+    locked_spaces = {
+        space.pk: space
+        for space in (
+            Space.objects.select_for_update()
+            .filter(pk__in=space_ids)
+            .order_by("pk")
+        )
+    }
+    space = locked_spaces.get(values["space_id"])
+
+    if space is None or not space.is_active:
+        raise ApiError(
+            "space_not_found",
+            "사용 가능한 공간을 찾을 수 없습니다.",
+            404,
+        )
+
+    if values["expected_count"] > space.capacity:
+        raise ApiError(
+            "capacity_exceeded",
+            "예상 인원이 공간 정원을 초과합니다.",
+        )
+
+    overlaps = list(
+        Schedule.objects.filter(
+            space=space,
+            is_cancelled=False,
+            starts_at__lt=values["ends_at"],
+            ends_at__gt=values["starts_at"],
+        ).exclude(pk=schedule.pk)
+    )
+
+    if overlaps and not confirm_overlap:
+        return None, [
+            {
+                "id": item.pk,
+                "title": item.title,
+                "starts_at": item.starts_at.isoformat(),
+                "ends_at": item.ends_at.isoformat(),
+            }
+            for item in overlaps
+        ]
+
+    values.pop("space_id")
+    schedule.space = space
+    for field, value in values.items():
+        setattr(schedule, field, value)
+
+    schedule.save()
+    notify_schedule_change(schedule_id=schedule.pk, action="updated")
+
+    return schedule, []

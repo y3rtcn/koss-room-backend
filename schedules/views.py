@@ -1,7 +1,7 @@
 from django.http import JsonResponse
 
 from common.http import ApiError, api, json_body
-from .services import create_schedule
+from .services import create_schedule, update_schedule
 from .models import Schedule
 
 
@@ -66,6 +66,27 @@ def schedule_detail(request, schedule_id):
             "일정을 찾을 수 없습니다.",
             404,
         )
+
+    return JsonResponse({
+        "schedule": schedule_data(schedule),
+    })
+
+@api(["PUT"])
+def schedule_update(request, schedule_id):
+    schedule, conflicts = update_schedule(
+        user=request.user,
+        schedule_id=schedule_id,
+        data=json_body(request),
+    )
+
+    if schedule is None:
+        return JsonResponse({
+            "error": {
+                "code": "schedule_overlap",
+                "message": "같은 공간에 겹치는 일정이 있습니다. 확인 후 다시 요청하세요.",
+            },
+            "conflicts": conflicts,
+        }, status=409)
 
     return JsonResponse({
         "schedule": schedule_data(schedule),

@@ -154,3 +154,120 @@ class ScheduleDetailTests(TestCase):
         response = self.client.get(self.url)
 
         self.assertEqual(response.status_code, 401)
+
+class ScheduleUpdateTests(TestCase):
+    def setUp(self):
+        from django.utils.dateparse import parse_datetime
+
+        self.user = get_user_model().objects.create_user(
+            username="update-member",
+            email="update-member@kookmin.ac.kr",
+        )
+        self.client.force_login(self.user)
+        self.space = Space.objects.create(name="수정 테스트 공간", capacity=4)
+        self.schedule = Schedule.objects.create(
+            title="기존 일정",
+            creator=self.user,
+            space=self.space,
+            starts_at=parse_datetime("2026-11-10T14:00:00+09:00"),
+            ends_at=parse_datetime("2026-11-10T15:00:00+09:00"),
+            expected_count=3,
+            purpose="공부",
+        )
+        self.url = f"/api/schedules/{self.schedule.pk}/update/"
+        self.payload = {
+            "title": "수정된 일정",
+            "space_id": self.space.pk,
+            "starts_at": "2026-11-10T14:00:00+09:00",
+            "ends_at": "2026-11-10T15:00:00+09:00",
+            "expected_count": 4,
+            "purpose": "회의",
+        }
+
+    def put(self, **changes):
+        return self.client.put(
+            self.url,
+            data={**self.payload, **changes},
+            content_type="application/json",
+        )
+
+    def add_conflicting_schedule(self):
+        return Schedule.objects.create(
+            title="다른 일정",
+            creator=self.user,
+            space=self.space,
+            starts_at=self.schedule.starts_at,
+            ends_at=self.schedule.ends_at,
+            expected_count=2,
+            purpose="회의",
+        )
+
+    def test_creator_can_update_without_self_conflict(self):
+        response = self.put()
+
+        self.assertEqual(response.status_code, 200)
+        self.schedule.refresh_from_db()
+        self.assertEqual(self.schedule.title, "수정된 일정")
+        self.assertEqual(self.schedule.expected_count, 4)
+        self.assertEqual(self.schedule.creator, self.user)
+
+    def test_other_user_cannot_update(self):
+        other = get_user_model().objects.create_user(
+            username="other-editor",
+            email="other-editor@kookmin.ac.kr",
+        )
+        self.client.force_login(other)
+
+        response = self.put()
+
+        self.assertEqual(response.status_code, 403)
+        self.schedule.refresh_from_db()
+        self.assertEqual(self.schedule.title, "기존 일정")
+
+    def test_overlap_requires_confirmation(self):
+        conflict = self.add_conflicting_schedule()
+
+        response = self.put()
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.json()["conflicts"][0]["id"],
+            conflict.pk,
+        )
+        self.schedule.refresh_from_db()
+        self.assertEqual(self.schedule.title, "기존 일정")
+
+    def test_confirmed_overlap_can_be_updated(self):
+        self.add_conflicting_schedule()
+
+        response = self.put(confirm_overlap=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.schedule.refresh_from_db()
+        self.assertEqual(self.schedule.title, "수정된 일정")
+
+    def test_cancelled_schedule_cannot_be_updated(self):
+        self.schedule.is_cancelled = True
+        self.schedule.save(update_fields=["is_cancelled"])
+
+        response = self.put()
+
+        self.assertEqual(response.status_code, 409)
+        self.schedule.refresh_from_db()
+        self.assertEqual(self.schedule.title, "기존 일정")
+
+    def test_new_space_capacity_is_checked(self):
+        smaller = Space.objects.create(name="작은 공간", capacity=2)
+
+        response = self.put(space_id=smaller.pk)
+
+        self.assertEqual(response.status_code, 400)
+        self.schedule.refresh_from_db()
+        self.assertEqual(self.schedule.space_id, self.space.pk)
+
+    def test_login_required(self):
+        self.client.logout()
+
+        response = self.put()
+
+        self.assertEqual(response.status_code, 401)
