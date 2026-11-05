@@ -1,6 +1,7 @@
 from django.http import JsonResponse
 
-from common.http import api
+from common.http import api, json_body
+from .services import create_schedule
 from .models import Schedule
 
 
@@ -31,4 +32,22 @@ def schedule_list(request):
         "schedules": [schedule_data(schedule) for schedule in schedules]
     })
 
-# Create your views here.
+@api(["POST"])
+def schedule_create(request):
+    schedule, conflicts = create_schedule(
+        user=request.user,
+        data=json_body(request),
+    )
+
+    if schedule is None:
+        return JsonResponse({
+            "error": {
+                "code": "schedule_overlap",
+                "message": "같은 공간에 겹치는 일정이 있습니다. 확인 후 다시 요청하세요.",
+            },
+            "conflicts": conflicts,
+        }, status=409)
+
+    return JsonResponse({
+        "schedule": schedule_data(schedule),
+    }, status=201)
