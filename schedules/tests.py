@@ -96,3 +96,61 @@ class ScheduleCreateTests(TestCase):
 
         self.assertEqual(response.status_code, 401)
         self.assertFalse(Schedule.objects.exists())
+
+class ScheduleDetailTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="detail-member",
+            email="detail-member@kookmin.ac.kr",
+        )
+        self.client.force_login(self.user)
+        space = Space.objects.create(name="상세 조회 공간", capacity=4)
+
+        from django.utils.dateparse import parse_datetime
+
+        self.schedule = Schedule.objects.create(
+            title="상세 조회 스터디",
+            creator=self.user,
+            space=space,
+            starts_at=parse_datetime("2026-11-10T14:00:00+09:00"),
+            ends_at=parse_datetime("2026-11-10T15:00:00+09:00"),
+            expected_count=3,
+            purpose="공부",
+        )
+        self.url = f"/api/schedules/{self.schedule.pk}/"
+
+    def test_returns_schedule(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()["schedule"]
+        self.assertEqual(data["id"], self.schedule.pk)
+        self.assertEqual(data["title"], "상세 조회 스터디")
+        self.assertEqual(data["creator_id"], str(self.user.pk))
+        self.assertEqual(data["space_id"], self.schedule.space_id)
+
+    def test_cancelled_schedule_can_be_viewed(self):
+        self.schedule.is_cancelled = True
+        self.schedule.save(update_fields=["is_cancelled"])
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["schedule"]["is_cancelled"])
+
+    def test_missing_schedule_returns_404(self):
+        missing_id = self.schedule.pk + 1
+        response = self.client.get(f"/api/schedules/{missing_id}/")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(
+            response.json()["error"]["code"],
+            "schedule_not_found",
+        )
+
+    def test_login_required(self):
+        self.client.logout()
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 401)

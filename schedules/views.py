@@ -1,6 +1,6 @@
 from django.http import JsonResponse
 
-from common.http import api, json_body
+from common.http import ApiError, api, json_body
 from .services import create_schedule
 from .models import Schedule
 
@@ -51,3 +51,22 @@ def schedule_create(request):
     return JsonResponse({
         "schedule": schedule_data(schedule),
     }, status=201)
+
+@api(["GET"])
+def schedule_detail(request, schedule_id):
+    try:
+        schedule = (
+            Schedule.objects
+            .select_related("space")
+            .get(pk=schedule_id)
+        )
+    except Schedule.DoesNotExist:
+        raise ApiError(
+            "schedule_not_found",
+            "일정을 찾을 수 없습니다.",
+            404,
+        )
+
+    return JsonResponse({
+        "schedule": schedule_data(schedule),
+    })
