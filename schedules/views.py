@@ -1,7 +1,12 @@
 from django.http import JsonResponse
 
 from common.http import ApiError, api, json_body
-from .services import create_schedule, update_schedule, cancel_schedule
+from .services import (
+    create_schedule,
+    update_schedule,
+    cancel_schedule,
+    join_schedule,
+)
 from .models import Schedule
 
 
@@ -102,4 +107,44 @@ def schedule_cancel(request, schedule_id):
     return JsonResponse({
         "schedule": schedule_data(schedule),
         "changed": changed,
+    })
+
+@api(["POST"])
+def schedule_join(request, schedule_id):
+    schedule, changed = join_schedule(
+        user=request.user,
+        schedule_id=schedule_id,
+    )
+
+    return JsonResponse({
+        "schedule_id": schedule.pk,
+        "changed": changed,
+        "participant_count": schedule.participations.count(),
+        "capacity": schedule.expected_count,
+    })
+
+
+@api(["GET"])
+def participant_list(request, schedule_id):
+    try:
+        schedule = Schedule.objects.get(pk=schedule_id)
+    except Schedule.DoesNotExist:
+        raise ApiError("schedule_not_found", "일정을 찾을 수 없습니다.", 404)
+
+    participations = list(
+        schedule.participations.select_related("user")
+    )
+
+    return JsonResponse({
+        "schedule_id": schedule.pk,
+        "capacity": schedule.expected_count,
+        "participant_count": len(participations),
+        "participants": [
+            {
+                "user_id": str(item.user_id),
+                "nickname": item.user.nickname or "동아리원",
+                "is_creator": item.user_id == schedule.creator_id,
+            }
+            for item in participations
+        ],
     })

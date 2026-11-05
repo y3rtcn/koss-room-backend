@@ -37,4 +37,24 @@ class Schedule(models.Model):
     def __str__(self):
         return self.title
 
-# Create your models here.
+class Participation(models.Model):
+    schedule = models.ForeignKey(
+        Schedule,
+        on_delete=models.CASCADE,
+        related_name="participations",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="schedule_participations",
+    )
+    joined_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["joined_at", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["schedule", "user"],
+                name="schedules_unique_participation",
+            ),
+        ]

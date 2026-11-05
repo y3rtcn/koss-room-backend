@@ -2,7 +2,7 @@ from django.db import transaction
 
 from realtime.events import notify_schedule_change
 from spaces.models import Space
-from .models import Schedule
+from .models import Participation, Schedule
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
@@ -111,6 +111,11 @@ def create_schedule(*, user, data):
         **values,
     )
 
+    Participation.objects.create(
+        schedule=schedule,
+        user=user,
+    )
+
     notify_schedule_change(
         schedule_id=schedule.pk,
         action="created",
@@ -140,6 +145,12 @@ def update_schedule(*, user, schedule_id, data):
         )
 
     values, confirm_overlap = validate_schedule_input(data)
+    if values["expected_count"] < schedule.participations.count():
+        raise ApiError(
+            "capacity_below_participants",
+            "현재 참여 인원보다 정원을 줄일 수 없습니다.",
+            409,
+        )
 
     space_ids = {schedule.space_id, values["space_id"]}
     locked_spaces = {
@@ -218,5 +229,34 @@ def cancel_schedule(*, user, schedule_id):
     schedule.save(update_fields=["is_cancelled"])
 
     notify_schedule_change(schedule_id=schedule.pk, action="cancelled")
+
+    return schedule, True
+
+@transaction.atomic
+def join_schedule(*, user, schedule_id):
+    try:
+        schedule = Schedule.objects.select_for_update().get(pk=schedule_id)
+    except Schedule.DoesNotExist:
+        raise ApiError("schedule_not_found", "일정을 찾을 수 없습니다.", 404)
+
+    if schedule.is_cancelled:
+        raise ApiError(
+            "schedule_cancelled",
+            "취소된 일정에는 참여할 수 없습니다.",
+            409,
+        )
+
+    if schedule.participations.filter(user=user).exists():
+        return schedule, False
+
+    if schedule.participations.count() >= schedule.expected_count:
+        raise ApiError(
+            "schedule_full",
+            "모집 정원이 가득 찼습니다.",
+            409,
+        )
+
+    Participation.objects.create(schedule=schedule, user=user)
+    notify_schedule_change(schedule_id=schedule.pk, action="updated")
 
     return schedule, True
