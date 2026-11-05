@@ -2,10 +2,10 @@ from datetime import datetime, time, timedelta
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
-from accounts.nicknames import display_nickname
 from attendance.models import OccupancyState
 from common.http import ApiError
 from realtime.events import publish_after_commit
@@ -38,7 +38,8 @@ def save_message(user, data):
         client_id = UUID(client_id)
     except ValueError:
         raise ApiError("invalid_client_id", "client_id는 UUID 문자열입니다.")
-    nickname = display_nickname(user)
+    nickname = getattr(user, getattr(settings, "ROOM_NICKNAME_FIELD", "nickname"), "")
+    nickname = str(nickname).strip()[:150] if nickname else "동아리원"
     content = content.strip()
     # 한 방의 쓰기를 직렬화해 ID 순서와 커밋 순서를 맞춥니다.
     # 그렇지 않으면 after_id 복구 도중 늦게 커밋된 작은 ID를 놓칠 수 있습니다.

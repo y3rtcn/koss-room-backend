@@ -1,6 +1,6 @@
-# KOSS ROOM A + B API / WebSocket
+# 백엔드 B API / WebSocket v1 제안
 
-Base path: `/api/`. WebSocket: `/ws/room/`. 경로 끝 `/`를 포함합니다. 로그인은 아래 A 인증 API를 사용합니다. 모든 기능 API와 소켓은 활성 로그인 사용자의 Django 세션 쿠키가 필요합니다. `/api/csrf/`와 `/api/auth/login/`만 비로그인 접근을 허용합니다. 로그인도 CSRF 검증을 받습니다.
+Base path: `/api/`. WebSocket: `/ws/room/`. 경로 끝 `/`를 포함합니다. 로그인은 A 담당입니다. 모든 기능 API와 소켓은 활성 로그인 사용자의 Django 세션 쿠키가 필요합니다. `/api/csrf/`만 비로그인 접근을 허용합니다.
 
 ## 공통 규칙
 
@@ -64,7 +64,7 @@ Base path: `/api/`. WebSocket: `/ws/room/`. 경로 끝 `/`를 포함합니다. �
 }
 ```
 
-닉네임은 `accounts.Profile.nickname`을 우선 사용하며, 프로필이 없으면 허용된 `ROOM_NICKNAME_FIELD`를 조회하고 최종 기본값은 `동아리원`입니다. 이메일·로그인 ID·비밀번호는 대체값으로 사용하지 않습니다. 프론트는 모든 메시지를 텍스트로 렌더링해야 합니다.
+닉네임은 A의 사용자 필드 연동 후 실제 값이 들어갑니다. 현재는 필드가 없으면 `동아리원`. 프론트는 모든 메시지를 텍스트로 렌더링해야 합니다.
 
 ### GET `/api/chat/messages/?date=2026-11-02&limit=50`
 
@@ -181,135 +181,3 @@ REST와 같은 검증·멱등키를 사용합니다. 발신자에게 `{"type":"c
 `{"type":"ping"}` → `{"type":"pong"}`. 잘못된 JSON, 이진 프레임, 알 수 없는 type, 잘못된 채팅은 `{"type":"error","error":{"code":"...","message":"..."}}`. 내용 검증 실패 시 DB에 저장하지 않습니다.
 
 이벤트 전달은 최선형입니다. 재접속/주기적 HTTP 재조회, 날짜 변경 처리, 세션 만료 처리 세부사항은 [연동 문서](integration.md)를 따릅니다.
-
-## A 공통 규칙
-
-A 변경 요청의 JSON 본문은 `Content-Type: application/json`, 본문이 비어 있는 작업은 `{}`를 보냅니다. 로그아웃은 본문 없이 호출할 수 있습니다. 본문은 16 KiB 이하입니다. 알 수 없는 JSON 필드는 `400 invalid_fields`; 작성자/참여자/이용자는 항상 세션의 `request.user`로 결정합니다. 모든 경로 끝에 `/`를 붙입니다.
-
-`auth.User`를 유지합니다. 사용자 응답은 `{"id":"1","nickname":"데모 다람쥐"}`로 제한하며 이메일·로그인 ID·비밀번호 해시를 반환하지 않습니다. 일정/테이블 ID는 정수, 사용자 ID와 WebSocket `schedule_id`는 문자열입니다. 닉네임은 프로필에 저장하며 현재 편집/회원가입 API는 없습니다. 채팅에는 작성 시 닉네임을 스냅샷으로 저장합니다.
-
-| 상태 | 예시 오류 코드 | 의미 |
-| --- | --- | --- |
-| 400 | `invalid_parameter`, `invalid_datetime`, `invalid_interval`, `invalid_fields` | 입력·필드 검증 |
-| 401 | `authentication_required`, `invalid_credentials` | 미인증, 잘못된 로그인 또는 비활성 사용자 |
-| 403 | `csrf_failed`, `permission_denied` | CSRF 또는 작성자 권한 |
-| 404 | `not_found` | 없는 일정/테이블, 잘못된 ID |
-| 409 | `schedule_overlap`, `schedule_cancelled`, `schedule_closed` | 일정 상태/겹침 충돌 |
-| 409 | `table_full`, `already_using_table` | 정원 초과·다른 테이블 이용 중 |
-| 409 | `recruitment_disabled`, `recruitment_full`, `capacity_below_count` | 모집 미설정·정원 충돌 |
-| 405 / 413 / 415 | `method_not_allowed` / `body_too_large` / `invalid_content_type` | 메서드·본문 크기·콘텐츠 타입 |
-
-기본 오류 형태는 B와 같습니다. 겹침 오류만 선택적인 `error.details`를 추가합니다.
-
-```json
-{"error":{"code":"permission_denied","message":"일정 작성자만 변경할 수 있습니다."}}
-```
-
-## 로그인·내 정보
-
-| 메서드 | 경로 | 요청 | 성공 |
-| --- | --- | --- | --- |
-| POST | `/api/auth/login/` | `{"username":"demo-room-a","password":"<직접 설정한 비밀번호>"}` | 200: `user`, 회전한 `csrf_token` |
-| POST | `/api/auth/logout/` | 본문 없음 | 200: `{"logged_out":true}` |
-| GET | `/api/auth/me/` | 없음 | 200: `{"user":{"id":"1","nickname":"데모 다람쥐"}}` |
-
-최초 로그인 전에도 `/api/csrf/`를 호출하고 `X-CSRFToken`을 보내야 합니다. 로그인 성공은 Django 비밀번호 검증과 세션 로그인으로 처리합니다. 비활성 사용자와 잘못된 비밀번호는 같은 `401 invalid_credentials`입니다. 우회 로그인은 없습니다. 로그인 성공 시 CSRF 쿠키가 회전하므로 로그인 응답의 토큰으로 교체합니다. 기존 토큰은 다음 변경 요청에서 `403`이 됩니다. 로그아웃은 로그인 필요이며 반복 로그아웃은 `401`입니다.
-
-## 일정
-
-| 메서드 | 경로 | 동작 |
-| --- | --- | --- |
-| GET | `/api/schedules/?start=<ISO>&end=<ISO>&limit=100&offset=0` | 조회 기간과 겹치는 일정(취소 포함) |
-| POST | `/api/schedules/` | 생성, 201 |
-| GET | `/api/schedules/{id}/` | 상세, 200 |
-| PATCH | `/api/schedules/{id}/` | 작성자 부분 수정, 200 |
-| POST | `/api/schedules/{id}/cancel/` | 작성자 취소, `{}`, 200 |
-
-조회는 `start`, `end` 필수, 최대 366일, `start < end`입니다. 구간은 `[start,end)`이며 `starts_at < end && ends_at > start`인 항목을 시작 시각·ID 순서로 제공합니다. `limit` 1~100(기본 100), `offset` 0~100000(기본 0). 응답은 `{"schedules":[...],"next_offset":null}`이며 다음 페이지가 있으면 정수 offset입니다. 목록은 조회 시점 데이터이며 동시에 일정이 바뀌면 처음부터 다시 조회하세요. 쿼리의 `+09:00`은 URL 인코딩하거나 `URLSearchParams`를 사용합니다.
-
-생성 예시(예시 날짜가 지났다면 바꾸세요):
-
-```json
-{
-  "title":"프로젝트 모임",
-  "description":"데모 진행 상황 공유",
-  "category":"study",
-  "starts_at":"2026-11-05T18:00:00+09:00",
-  "ends_at":"2026-11-05T19:00:00+09:00",
-  "confirm_overlap":false
-}
-```
-
-`title` 필수 1~120자, `description` 선택 0~4000자(기본 빈 문자열), `category` 선택 1~80자(기본 `general`). 원문 길이 검증 후 양 끝 공백을 제거합니다. Unicode code point 기준이며 NUL/잘못된 Unicode는 거부합니다. `starts_at`, `ends_at`은 필수이며 `YYYY-MM-DDTHH:mm:ss[.ffffff]Z` 또는 `±HH:mm` 오프셋을 사용합니다. UTC 변환 기준 연도 2~9998, 시작은 종료보다 빨라야 합니다. 과거 일정 저장은 가능하지만 종료된 일정에 신규 참여/모집 변경은 불가합니다. 분류는 데모에서 자유 문자열입니다.
-
-생성·상세·수정 응답:
-
-```json
-{
-  "schedule": {
-    "id":1,"title":"프로젝트 모임","description":"데모 진행 상황 공유","category":"study",
-    "starts_at":"2026-11-05T09:00:00+00:00","ends_at":"2026-11-05T10:00:00+00:00",
-    "author":{"id":"1","nickname":"데모 다람쥐"},"is_cancelled":false,
-    "created_at":"2026-11-04T01:00:00+00:00","updated_at":"2026-11-04T01:00:00+00:00",
-    "recruitment":{"capacity":null,"participant_count":0,"is_participating":false}
-  }
-}
-```
-
-취소는 `{"schedule":{...},"changed":true}`이며 반복 취소는 `changed:false`입니다. 취소된 일정은 수정/복구할 수 없습니다. 일반 사용자·staff/superuser 모두 작성자만 수정/취소/모집 설정할 수 있으며 관리자 우회 권한은 추가하지 않았습니다.
-
-### 일정 겹침 확인
-
-취소되지 않은 일정에 대해 `[시작,종료)`가 겹치면 생성·수정 모두 거부합니다. 수정 시 자기 자신은 제외하고 끝과 시작이 같은 경계는 허용합니다. 제목만 수정하더라도 현재 다른 일정과 겹치면 확인이 필요합니다.
-
-```json
-{
-  "error": {
-    "code":"schedule_overlap",
-    "message":"겹치는 일정을 확인한 뒤 confirm_overlap=true로 다시 요청하세요.",
-    "details":{
-      "conflicts":[{"id":1,"title":"프로젝트 모임","starts_at":"2026-11-05T09:00:00+00:00","ends_at":"2026-11-05T10:00:00+00:00"}],
-      "has_more":false
-    }
-  }
-}
-```
-
-프론트는 충돌 일정을 표시하고 사용자가 확인하면 같은 요청에 **boolean** `confirm_overlap:true`를 붙여 재요청합니다. 최대 100개 충돌을 제공하며 이후 항목이 있으면 `has_more:true`입니다. 확인 플래그는 재요청 시점의 모든 겹침을 허용하며 특정 충돌 버전/ID에 묶인 승인 토큰은 아닙니다. 생성 API 자체는 멱등하지 않으므로 네트워크 응답 유실 시 목록 확인 없이 자동 재생성하지 않습니다.
-
-일정 저장/취소/모집 설정/참여 변경은 해당 트랜잭션에서 `notify_schedule_change`를 호출합니다. 일정 생성은 `created`, 취소는 `cancelled`, 수정·모집/참여 변경은 `updated`. 커밋 이후 전달되며 롤백하면 이벤트가 없습니다. 반복 참여/취소/같은 모집 설정에는 추가 이벤트가 없습니다. 프론트는 이벤트를 받은 뒤 상세/목록을 다시 조회합니다.
-
-## 일정 참여 모집
-
-| 메서드 | 경로 | 요청 / 응답 |
-| --- | --- | --- |
-| GET | `/api/schedules/{id}/recruitment/` | `{"recruitment":{"capacity":4,"participant_count":0,"is_participating":false}}` |
-| PUT | `/api/schedules/{id}/recruitment/` | 작성자만 `{"capacity":4}` |
-| POST | `/api/schedules/{id}/participation/` | 본인 참여, `{}` |
-| DELETE | `/api/schedules/{id}/participation/` | 본인 참여 취소, `{}` |
-
-모집 정원은 1~10000 정수입니다. `capacity:null`은 모집을 끄며 참여자가 0명일 때만 가능합니다. 최초 일정은 모집 미설정 상태입니다. 설정·참여·취소 성공은 모두 200:
-
-```json
-{"recruitment":{"capacity":4,"participant_count":1,"is_participating":true},"changed":true}
-```
-
-반복 참여/미참여자의 취소는 `changed:false`. 작성자도 직접 참여할 때만 인원에 포함됩니다. 정원 축소는 현재 인원 이상이어야 합니다. 취소되었거나 종료 시각에 도달한 일정은 신규 참여를 거부합니다. 기존 참여자의 재시도는 취소·종료 후에도 멱등 성공하며 본인 참여 취소도 허용합니다. 일정 취소가 기존 참여 기록을 삭제하지 않습니다. 일정 시간 수정도 기존 참여를 유지합니다. 참여 명단/개인정보 공개 API는 없습니다.
-
-## 물리적 테이블
-
-| 메서드 | 경로 | 동작 |
-| --- | --- | --- |
-| GET | `/api/tables/` | 전체 테이블 ID순 목록 |
-| POST | `/api/tables/{id}/use/` | `{}`: 본인 이용 시작 |
-| DELETE | `/api/tables/{id}/use/` | `{}`: 해당 테이블의 본인 이용 종료 |
-
-목록 예시:
-
-```json
-{"tables":[{"id":1,"name":"테이블 1","capacity":4,"current_count":1,"is_using":true}]}
-```
-
-시작/종료는 200 `{"table":{...},"changed":true}`. 같은 테이블의 시작 재시도, 이미 종료한 이용의 종료 재시도는 `changed:false`이며 중복 기록을 만들지 않습니다. 다른 테이블로 이동하려면 먼저 기존 이용을 종료해야 합니다. 이용 중인 테이블과 다른 테이블에 종료 요청을 보내면 현재 이용은 유지하고 `changed:false`입니다. 다른 사용자 ID를 넣은 JSON은 거부합니다.
-
-한 사용자는 동시에 한 테이블만 이용합니다. 정원 초과는 `409 table_full`. 테이블/정원 생성·편집 API는 이번 범위에 없고 `seed_demo`로 준비합니다. 브라우저 종료·로그아웃은 이용 종료가 아닙니다. 명시적 시작/종료가 기준이며 실제 입퇴실 인원과 완전히 독립적입니다. 테이블 전용 실시간 이벤트는 없으므로 변경 후/탭 복귀/주기적으로 목록을 조회합니다.
