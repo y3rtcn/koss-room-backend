@@ -475,3 +475,132 @@ class ParticipationTests(TestCase):
 
         self.assertEqual(self.client.post(self.join_url).status_code, 401)
         self.assertEqual(self.client.get(self.list_url).status_code, 401)
+
+class ParticipationLeaveTests(TestCase):
+    def setUp(self):
+        self.creator = get_user_model().objects.create_user(
+            username="leave-creator",
+            email="leave-creator@kookmin.ac.kr",
+        )
+        self.member = get_user_model().objects.create_user(
+            username="leave-member",
+            email="leave-member@kookmin.ac.kr",
+        )
+        self.client.force_login(self.creator)
+        space = Space.objects.create(name="참여 취소 공간", capacity=4)
+
+        response = self.client.post(
+            "/api/schedules/create/",
+            data={
+                "title": "참여 취소 테스트",
+                "space_id": space.pk,
+                "starts_at": "2026-11-10T14:00:00+09:00",
+                "ends_at": "2026-11-10T15:00:00+09:00",
+                "expected_count": 2,
+                "purpose": "스터디",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.schedule = Schedule.objects.get(
+            pk=response.json()["schedule"]["id"]
+        )
+        self.join_url = f"/api/schedules/{self.schedule.pk}/join/"
+        self.leave_url = f"/api/schedules/{self.schedule.pk}/leave/"
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.post(self.join_url).status_code, 200)
+
+    def test_member_can_leave(self):
+        response = self.client.post(self.leave_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["changed"])
+        self.assertEqual(response.json()["participant_count"], 1)
+        self.assertFalse(
+            self.schedule.participations.filter(user=self.member).exists()
+        )
+
+    def test_repeated_leave_does_not_notify_again(self):
+        from unittest.mock import patch
+
+        with patch("schedules.services.notify_schedule_change") as notify:
+            first = self.client.post(self.leave_url)
+            second = self.client.post(self.leave_url)
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertFalse(second.json()["changed"])
+        notify.assert_called_once_with(
+            schedule_id=self.schedule.pk,
+            action="updated",
+        )
+
+    def test_creator_cannot_leave(self):
+        self.client.force_login(self.creator)
+
+        response = self.client.post(self.leave_url)
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.json()["error"]["code"],
+            "creator_cannot_leave",
+        )
+        self.assertTrue(
+            self.schedule.participations.filter(user=self.creator).exists()
+        )
+
+    def test_another_member_can_fill_vacancy(self):
+        self.client.post(self.leave_url)
+        other = get_user_model().objects.create_user(
+            username="replacement-member",
+            email="replacement-member@kookmin.ac.kr",
+        )
+        self.client.force_login(other)
+
+        response = self.client.post(self.join_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["changed"])
+        self.assertEqual(self.schedule.participations.count(), 2)
+
+    def test_leave_cannot_remove_another_user(self):
+        other = get_user_model().objects.create_user(
+            username="unrelated-member",
+            email="unrelated-member@kookmin.ac.kr",
+        )
+        self.client.force_login(other)
+
+        response = self.client.post(
+            self.leave_url,
+            data={"user_id": self.member.pk},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["changed"])
+        self.assertTrue(
+            self.schedule.participations.filter(user=self.member).exists()
+        )
+
+    def test_cancelled_schedule_keeps_participation_records(self):
+        self.schedule.is_cancelled = True
+        self.schedule.save(update_fields=["is_cancelled"])
+
+        response = self.client.post(self.leave_url)
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(self.schedule.participations.count(), 2)
+
+    def test_missing_schedule_returns_404(self):
+        response = self.client.post(
+            f"/api/schedules/{self.schedule.pk + 1}/leave/"
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_login_required(self):
+        self.client.logout()
+
+        response = self.client.post(self.leave_url)
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(self.schedule.participations.count(), 2)

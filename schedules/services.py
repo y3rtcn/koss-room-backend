@@ -260,3 +260,32 @@ def join_schedule(*, user, schedule_id):
     notify_schedule_change(schedule_id=schedule.pk, action="updated")
 
     return schedule, True
+
+@transaction.atomic
+def leave_schedule(*, user, schedule_id):
+    try:
+        schedule = Schedule.objects.select_for_update().get(pk=schedule_id)
+    except Schedule.DoesNotExist:
+        raise ApiError("schedule_not_found", "일정을 찾을 수 없습니다.", 404)
+
+    if schedule.is_cancelled:
+        raise ApiError(
+            "schedule_cancelled",
+            "취소된 일정의 참여 정보는 변경할 수 없습니다.",
+            409,
+        )
+
+    if schedule.creator_id == user.pk:
+        raise ApiError(
+            "creator_cannot_leave",
+            "작성자는 참여만 취소할 수 없습니다. 일정 취소를 이용하세요.",
+            409,
+        )
+
+    deleted_count, _ = schedule.participations.filter(user=user).delete()
+    changed = deleted_count > 0
+
+    if changed:
+        notify_schedule_change(schedule_id=schedule.pk, action="updated")
+
+    return schedule, changed

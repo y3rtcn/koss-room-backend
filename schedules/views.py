@@ -6,6 +6,7 @@ from .services import (
     update_schedule,
     cancel_schedule,
     join_schedule,
+    leave_schedule,
 )
 from .models import Schedule
 
@@ -147,4 +148,18 @@ def participant_list(request, schedule_id):
             }
             for item in participations
         ],
+    })
+
+@api(["POST"])
+def schedule_leave(request, schedule_id):
+    schedule, changed = leave_schedule(
+        user=request.user,
+        schedule_id=schedule_id,
+    )
+
+    return JsonResponse({
+        "schedule_id": schedule.pk,
+        "changed": changed,
+        "participant_count": schedule.participations.count(),
+        "capacity": schedule.expected_count,
     })

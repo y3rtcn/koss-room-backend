@@ -10,4 +10,5 @@ urlpatterns = [
     path("<int:schedule_id>/cancel/", views.schedule_cancel, name="schedule-cancel"),
     path("<int:schedule_id>/join/", views.schedule_join, name="schedule-join"),
     path("<int:schedule_id>/participants/", views.participant_list, name="schedule-participants"),
+    path("<int:schedule_id>/leave/", views.schedule_leave, name="schedule-leave"),
 ]
