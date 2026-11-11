@@ -5,6 +5,10 @@ from django.db import IntegrityError, transaction
 from common.http import ApiError, api, json_body
 from .models import Space
 
+from django.db.models import Count, Q
+from django.utils import timezone
+
+from schedules.models import Schedule
 
 @api(["GET"])
 def space_list(request):
@@ -56,18 +60,41 @@ def space_update(request, space_id):
     if not request.user.is_staff:
         raise ApiError("permission_denied", "관리자만 사용할 수 있습니다.", 403)
 
-    data = json_body(request)
-    capacity = data.get("capacity")
-
+    capacity = json_body(request).get("capacity")
     if type(capacity) is not int or not 1 <= capacity <= 32767:
         raise ApiError("invalid_capacity", "정원은 1~32767의 정수로 입력하세요.")
 
-    updated = Space.objects.filter(pk=space_id).update(capacity=capacity)
+    with transaction.atomic():
+        try:
+            space = Space.objects.select_for_update().get(pk=space_id)
+        except Space.DoesNotExist:
+            raise ApiError("space_not_found", "공간을 찾을 수 없습니다.", 404)
 
-    if not updated:
-        raise ApiError("space_not_found", "공간을 찾을 수 없습니다.", 404)
+        if capacity < space.capacity:
+            has_conflict = (
+                Schedule.objects.filter(
+                    space=space,
+                    is_cancelled=False,
+                    ends_at__gt=timezone.now(),
+                )
+                .annotate(participant_count=Count("participations"))
+                .filter(
+                    Q(expected_count__gt=capacity)
+                    | Q(participant_count__gt=capacity)
+                )
+                .exists()
+            )
+            if has_conflict:
+                raise ApiError(
+                    "space_capacity_conflict",
+                    "기존 일정의 모집 정원 또는 참여 인원보다 공간 정원을 줄일 수 없습니다.",
+                    409,
+                )
+
+        space.capacity = capacity
+        space.save(update_fields=["capacity"])
 
     return JsonResponse({
-        "id": space_id,
-        "capacity": capacity,
+        "id": space.pk,
+        "capacity": space.capacity,
     })

@@ -3,6 +3,11 @@ from django.test import TestCase
 
 from .models import Space
 
+from datetime import timedelta
+
+from django.utils import timezone
+
+from schedules.models import Schedule
 
 class SpaceListTests(TestCase):
     def test_login_required(self):
@@ -146,3 +151,59 @@ class SpaceUpdateTests(TestCase):
         response = self.patch({"capacity": 6})
 
         self.assertEqual(response.status_code, 401)
+    def create_reservation(self, *, starts_at, ends_at, cancelled=False):
+        return Schedule.objects.create(
+            title="테이블 예약",
+            creator=self.user,
+            space=self.space,
+            starts_at=starts_at,
+            ends_at=ends_at,
+            expected_count=3,
+            purpose="스터디",
+            is_cancelled=cancelled,
+        )
+
+    def test_cannot_reduce_capacity_below_upcoming_reservation(self):
+        now = timezone.now()
+        self.create_reservation(
+            starts_at=now + timedelta(hours=1),
+            ends_at=now + timedelta(hours=2),
+        )
+
+        response = self.patch({"capacity": 2})
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["error"]["code"], "space_capacity_conflict")
+        self.space.refresh_from_db()
+        self.assertEqual(self.space.capacity, 4)
+
+    def test_can_reduce_capacity_to_reserved_count(self):
+        now = timezone.now()
+        self.create_reservation(
+            starts_at=now - timedelta(hours=1),
+            ends_at=now + timedelta(hours=1),
+        )
+
+        response = self.patch({"capacity": 3})
+
+        self.assertEqual(response.status_code, 200)
+        self.space.refresh_from_db()
+        self.assertEqual(self.space.capacity, 3)
+
+    def test_ended_and_cancelled_reservations_do_not_block_reduction(self):
+        now = timezone.now()
+        self.create_reservation(
+            starts_at=now - timedelta(hours=2),
+            ends_at=now - timedelta(hours=1),
+        )
+        self.create_reservation(
+            starts_at=now + timedelta(hours=1),
+            ends_at=now + timedelta(hours=2),
+            cancelled=True,
+        )
+
+        response = self.patch({"capacity": 2})
+
+        self.assertEqual(response.status_code, 200)
+        self.space.refresh_from_db()
+        self.assertEqual(self.space.capacity, 2)
