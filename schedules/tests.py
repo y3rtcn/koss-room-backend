@@ -3,7 +3,9 @@ from django.test import TestCase
 
 from spaces.models import Space
 from .models import Schedule
+from datetime import timedelta
 
+from django.utils import timezone
 
 class ScheduleCreateTests(TestCase):
     def setUp(self):
@@ -29,7 +31,24 @@ class ScheduleCreateTests(TestCase):
             data=data,
             content_type="application/json",
         )
+    def test_rejects_control_characters_in_title_and_purpose(self):
+        for field in ("title", "purpose"):
+            with self.subTest(field=field):
+                response = self.post(**{field: "첫 줄\n둘째 줄"})
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.json()["error"]["code"], "invalid_text")
 
+        self.assertFalse(Schedule.objects.exists())
+
+    def test_accepts_punctuation_in_title_and_purpose(self):
+        response = self.post(
+            title="파이썬 스터디 (1회차)!",
+            purpose="발표 & 토론",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["schedule"]["purpose"], "발표 & 토론")
+        
     def test_create_schedule(self):
         response = self.post()
 
@@ -371,11 +390,12 @@ class ParticipationTests(TestCase):
         )
         self.client.force_login(self.creator)
         self.space = Space.objects.create(name="참여 테스트 공간", capacity=4)
+        starts_at = timezone.now() + timedelta(days=1)
         self.payload = {
             "title": "참여 테스트",
             "space_id": self.space.pk,
-            "starts_at": "2026-11-10T14:00:00+09:00",
-            "ends_at": "2026-11-10T15:00:00+09:00",
+            "starts_at": starts_at.isoformat(),
+            "ends_at": (starts_at + timedelta(hours=1)).isoformat(),
             "expected_count": 2,
             "purpose": "스터디",
         }
@@ -396,7 +416,21 @@ class ParticipationTests(TestCase):
         self.assertTrue(
             self.schedule.participations.filter(user=self.creator).exists()
         )
+    def test_ended_schedule_rejects_new_participation(self):
+        now = timezone.now()
+        Schedule.objects.filter(pk=self.schedule.pk).update(
+            starts_at=now - timedelta(hours=2),
+            ends_at=now - timedelta(hours=1),
+        )
+        self.client.force_login(self.member)
 
+        response = self.client.post(self.join_url)
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["error"]["code"], "schedule_ended")
+        self.assertFalse(
+            self.schedule.participations.filter(user=self.member).exists()
+        )
     def test_member_can_join(self):
         self.client.force_login(self.member)
 
@@ -488,14 +522,14 @@ class ParticipationLeaveTests(TestCase):
         )
         self.client.force_login(self.creator)
         space = Space.objects.create(name="참여 취소 공간", capacity=4)
-
+        starts_at = timezone.now() + timedelta(days=1)
         response = self.client.post(
             "/api/schedules/create/",
             data={
                 "title": "참여 취소 테스트",
                 "space_id": space.pk,
-                "starts_at": "2026-11-10T14:00:00+09:00",
-                "ends_at": "2026-11-10T15:00:00+09:00",
+                "starts_at": starts_at.isoformat(),
+                "ends_at": (starts_at + timedelta(hours=1)).isoformat(),
                 "expected_count": 2,
                 "purpose": "스터디",
             },

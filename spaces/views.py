@@ -1,5 +1,5 @@
 from django.http import JsonResponse
-
+from unicodedata import category
 from django.db import IntegrityError, transaction
 
 from common.http import ApiError, api, json_body
@@ -37,6 +37,12 @@ def space_create(request):
     if not isinstance(name, str) or not 1 <= len(name.strip()) <= 50:
         raise ApiError("invalid_name", "공간 이름은 1~50자로 입력하세요.")
 
+    if any(category(char) in {"Cc", "Cs"} for char in name):
+        raise ApiError(
+            "invalid_name",
+            "공간 이름에 줄바꿈이나 제어 문자를 사용할 수 없습니다.",
+        )
+        
     if type(capacity) is not int or not 1 <= capacity <= 32767:
         raise ApiError("invalid_capacity", "정원은 1~32767의 정수로 입력하세요.")
 

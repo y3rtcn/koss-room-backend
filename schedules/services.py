@@ -1,4 +1,5 @@
 from django.db import transaction
+from unicodedata import category
 
 from realtime.events import notify_schedule_change
 from spaces.models import Space
@@ -18,6 +19,11 @@ def validate_schedule_input(data):
             raise ApiError(
                 "invalid_text",
                 f"{field} 항목은 1~100자로 입력하세요.",
+            )
+        if any(category(char) in {"Cc", "Cs"} for char in value):
+            raise ApiError(
+                "invalid_text",
+                f"{field} 항목에 줄바꿈이나 제어 문자를 사용할 수 없습니다.",
             )
         result[field] = value.strip()
 
@@ -248,7 +254,12 @@ def join_schedule(*, user, schedule_id):
 
     if schedule.participations.filter(user=user).exists():
         return schedule, False
-
+    if schedule.ends_at <= timezone.now():
+        raise ApiError(
+            "schedule_ended",
+            "이미 종료된 일정에는 참여할 수 없습니다.",
+            409,
+        )
     if schedule.participations.count() >= schedule.expected_count:
         raise ApiError(
             "schedule_full",

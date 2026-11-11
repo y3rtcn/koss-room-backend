@@ -10,7 +10,9 @@ from common.http import ApiError
 from spaces.models import Space
 from .models import Schedule
 from .services import create_schedule, join_schedule
+from datetime import timedelta
 
+from django.utils import timezone
 
 @skipUnless(connection.vendor == "postgresql", "PostgreSQL 전용 테스트")
 class ParticipationConcurrencyTests(TransactionTestCase):
@@ -28,13 +30,14 @@ class ParticipationConcurrencyTests(TransactionTestCase):
             for i in range(2)
         ]
         space = Space.objects.create(name="동시 신청 공간", capacity=4)
+        starts_at = timezone.now() + timedelta(days=1)
         schedule, _ = create_schedule(
             user=creator,
             data={
                 "title": "마지막 한 자리",
                 "space_id": space.pk,
-                "starts_at": "2026-11-10T14:00:00+09:00",
-                "ends_at": "2026-11-10T15:00:00+09:00",
+                "starts_at": starts_at.isoformat(),
+                "ends_at": (starts_at + timedelta(hours=1)).isoformat(),
                 "expected_count": 2,
                 "purpose": "스터디",
             },

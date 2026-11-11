@@ -56,7 +56,18 @@ class SpaceCreateTests(TestCase):
             data=data,
             content_type="application/json",
         )
+    def test_rejects_control_characters_in_space_name(self):
+        response = self.post({"name": "테이블\nA", "capacity": 4})
 
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"]["code"], "invalid_name")
+        self.assertFalse(Space.objects.exists())
+
+    def test_accepts_punctuation_in_space_name(self):
+        response = self.post({"name": "테이블 A (창가)", "capacity": 4})
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["name"], "테이블 A (창가)")
     def test_admin_can_create_space(self):
         response = self.post({"name": "테이블 B", "capacity": 6})
 
