@@ -9,8 +9,8 @@ from attendance.models import Visit
 
 class AnalyticsTests(TestCase):
     def setUp(self):
-        self.a = get_user_model().objects.create_user(username="a")
-        self.b = get_user_model().objects.create_user(username="b")
+        self.a = get_user_model().objects.create_user(username="a", email="a@kookmin.ac.kr")
+        self.b = get_user_model().objects.create_user(username="b", email="b@kookmin.ac.kr")
         self.start = datetime(2026, 10, 31, tzinfo=KST)
         self.now = self.start + timedelta(days=1)
         self.client.force_login(self.a)

@@ -23,7 +23,7 @@ from realtime.events import notify_schedule_change
 class RealtimeTests(TransactionTestCase):
     def setUp(self):
         OccupancyState.objects.get_or_create(pk=1)
-        self.user = get_user_model().objects.create_user(username="member")
+        self.user = get_user_model().objects.create_user(username="member", email="member@kookmin.ac.kr")
         self.client.force_login(self.user)
         self.session_key = self.client.session.session_key
         self.cookie = f"sessionid={self.session_key}".encode()
