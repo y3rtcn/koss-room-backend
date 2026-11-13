@@ -15,7 +15,7 @@ from chat.services import KST, save_message
 
 class ChatTests(TestCase):
     def setUp(self):
-        self.user = get_user_model().objects.create_user(username="private-login-id", first_name="닉네임")
+        self.user = get_user_model().objects.create_user(username="private-login-id", first_name="닉네임", email="chat-member@kookmin.ac.kr")
         self.client.force_login(self.user)
         self.payload = {"content": "안녕하세요 <script>text</script>", "client_id": str(uuid4())}
 
@@ -50,7 +50,7 @@ class ChatTests(TestCase):
 
     def test_per_user_idempotency_key(self):
         self.post(self.payload)
-        self.client.force_login(get_user_model().objects.create_user(username="other"))
+        self.client.force_login(get_user_model().objects.create_user(username="other", email="other@kookmin.ac.kr"))
         self.assertEqual(self.post(self.payload).status_code, 201)
 
     def test_korean_midnight_and_bidirectional_pagination(self):
@@ -80,7 +80,7 @@ class ChatConcurrencyTests(TransactionTestCase):
         OccupancyState.objects.get_or_create(pk=1)
 
     def test_simultaneous_retries_save_one_message(self):
-        user = get_user_model().objects.create_user(username="member")
+        user = get_user_model().objects.create_user(username="member", email="member@kookmin.ac.kr")
         payload = {"content": "one message", "client_id": str(uuid4())}
         barrier = Barrier(4)
 

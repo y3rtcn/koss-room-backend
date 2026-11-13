@@ -15,7 +15,7 @@ from attendance.services import set_presence
 
 class AttendanceTests(TestCase):
     def setUp(self):
-        self.user = get_user_model().objects.create_user(username="member")
+        self.user = get_user_model().objects.create_user(username="member", email="member@kookmin.ac.kr")
         self.client.force_login(self.user)
 
     def test_full_attendance_flow_and_repeated_buttons(self):
@@ -27,7 +27,7 @@ class AttendanceTests(TestCase):
         self.assertFalse(again["changed"])
         self.assertEqual(first["revision"], again["revision"])
         self.assertEqual(Visit.objects.count(), 1)
-        other = get_user_model().objects.create_user(username="other")
+        other = get_user_model().objects.create_user(username="other", email="other@kookmin.ac.kr")
         set_presence(other, inside=True)
         out = self.client.post("/api/attendance/check-out/").json()
         repeated = self.client.post("/api/attendance/check-out/").json()
@@ -37,7 +37,7 @@ class AttendanceTests(TestCase):
         self.assertIsNotNone(Visit.objects.get(user=self.user).exited_at)
 
     def test_body_cannot_choose_another_user(self):
-        other = get_user_model().objects.create_user(username="other")
+        other = get_user_model().objects.create_user(username="other", email="other@kookmin.ac.kr")
         self.client.post("/api/attendance/check-in/", {"user_id": other.pk})
         self.assertEqual(Visit.objects.get().user_id, self.user.pk)
 
@@ -91,7 +91,7 @@ class AttendanceTests(TestCase):
 class AttendanceConcurrencyTests(TransactionTestCase):
     def setUp(self):
         OccupancyState.objects.get_or_create(pk=1)
-        self.users = [get_user_model().objects.create_user(username=f"member-{i}") for i in range(4)]
+        self.users = [get_user_model().objects.create_user(username=f"member-{i}", email=f"member-{i}@kookmin.ac.kr") for i in range(4)]
 
     def parallel(self, users, inside):
         barrier = Barrier(len(users))
