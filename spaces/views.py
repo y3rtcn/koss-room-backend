@@ -42,7 +42,7 @@ def space_create(request):
             "invalid_name",
             "공간 이름에 줄바꿈이나 제어 문자를 사용할 수 없습니다.",
         )
-        
+
     if type(capacity) is not int or not 1 <= capacity <= 32767:
         raise ApiError("invalid_capacity", "정원은 1~32767의 정수로 입력하세요.")
 

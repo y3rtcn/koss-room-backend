@@ -48,7 +48,7 @@ class ScheduleCreateTests(TestCase):
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()["schedule"]["purpose"], "발표 & 토론")
-        
+
     def test_create_schedule(self):
         response = self.post()
 
