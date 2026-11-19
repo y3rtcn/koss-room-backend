@@ -7,11 +7,16 @@ from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
-DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
+# 기본값은 운영 모드입니다. 로컬 개발은 .env에 DJANGO_DEBUG=1을 넣습니다.
+DEBUG = os.getenv("DJANGO_DEBUG", "0") == "1"
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "local-development-only-change-before-deploying")
 if not DEBUG and SECRET_KEY == "local-development-only-change-before-deploying":
     raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set outside local development")
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    if host.strip()
+]
 INSTALLED_APPS = [
     "daphne",
     "django.contrib.auth",
@@ -35,6 +40,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
 ]
 ROOT_URLCONF = "config.urls"
@@ -72,6 +78,15 @@ SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
+X_FRAME_OPTIONS = "DENY"
+
+# 운영(DEBUG=0): HTTPS를 처리하는 프록시(Render 등) 뒤에서 실행한다고 가정합니다.
+# 프록시가 X-Forwarded-Proto를 설정해야 Django와 Google 로그인 콜백이 https로 동작합니다.
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_SSL_REDIRECT = os.getenv("DJANGO_SECURE_SSL_REDIRECT", "1") == "1"
+    SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_HSTS_SECONDS", "3600"))
+ACCOUNT_DEFAULT_HTTP_PROTOCOL = "http" if DEBUG else "https"
 DATA_UPLOAD_MAX_MEMORY_SIZE = 16 * 1024
 # A의 User.nickname 확정 전 임시 표시 필드. 이메일/로그인 ID를 대체 표시하지 않습니다.
 ROOM_NICKNAME_FIELD = "nickname"
