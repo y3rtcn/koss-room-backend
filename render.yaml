@@ -1,0 +1,24 @@
+# Render Blueprint: 무료 웹 서비스 1개 (HTTP + WebSocket을 Daphne 프로세스 하나로 실행).
+# DB는 Neon 무료 PostgreSQL을 DATABASE_URL로 연결합니다. 자세한 절차: docs/deploy.md
+services:
+  - type: web
+    name: koss-room-backend
+    runtime: python
+    plan: free
+    region: singapore
+    # Python 버전은 저장소 루트의 .python-version(3.12.14)을 따릅니다.
+    # 무료 플랜에는 preDeployCommand가 없어 빌드 단계에서 마이그레이션합니다.
+    buildCommand: pip install -r requirements.lock.txt && python manage.py migrate --noinput
+    startCommand: daphne --proxy-headers -b 0.0.0.0 -p $PORT config.asgi:application
+    autoDeployTrigger: commit
+    envVars:
+      - key: DJANGO_DEBUG
+        value: "0"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false

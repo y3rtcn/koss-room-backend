@@ -31,11 +31,31 @@ PostgreSQL 공식 17.7 소스를 `/private/tmp`에서 빌드해 임시 DB 서버
 
 B의 연결 흐름은 `tests/test_realtime.py`의 `test_full_authenticated_flow_and_reconnect`가 검증합니다. 테스트 세션으로 로그인한 뒤 입실 → 인원 이벤트 → 소켓 채팅·저장 → 재접속·HTTP 대화 복구 → 퇴실 → 통계 조회를 수행합니다.
 
+## 배포 설정 검증 (2026-11-26)
+
+`render.yaml`의 빌드·시작 명령을 Render와 같은 환경 변수(`DJANGO_DEBUG=0`, 생성한 `DJANGO_SECRET_KEY`, `DATABASE_URL`, `RENDER_EXTERNAL_HOSTNAME`, `PORT`)로 로컬 임시 PostgreSQL 16.15에 대해 실행했습니다. Render·Neon 실제 계정에서는 아직 실행하지 않았습니다.
+
+| 검증 | 결과 |
+| --- | --- |
+| `DATABASE_URL`로 PostgreSQL 전체 `python manage.py test` | 102개 모두 통과, skip 없음 |
+| SQLite 전체 `python manage.py test` | 통과, PostgreSQL 전용 5개 skip |
+| 빌드 명령(의존성 설치 + `migrate`) | 성공 |
+| `python manage.py check --deploy` | HSTS 하위 도메인·preload 경고 2개만 (`onrender.com` 하위 주소라 적용하지 않음) |
+| 프록시 HTTPS 헤더로 `GET /api/csrf/` | `200` |
+| HTTPS 헤더 없는 요청 | `301` → `https://` |
+| 비로그인 `GET /api/attendance/me/` | `401 authentication_required` |
+| 등록되지 않은 Host | `400` |
+| `/accounts/google/login/` | `200` |
+| WebSocket: 다른 Origin / 세션 없음 | 둘 다 handshake `403` |
+| WebSocket: 서비스 Origin + 세션 | `connected` 수신 |
+| CSRF 포함 입실 → 소켓 `attendance.updated` → 소켓 채팅 `chat.ack`·`chat.message` → 퇴실 | 모두 정상 |
+| CSRF 없는 POST | `403 csrf_failed` |
+
 ## 아직 확인하지 않은 것
 
 - A가 구현할 실제 로그인·커스텀 사용자 모델·닉네임, 일정 저장 코드와의 통합. 테스트는 Django 기본 사용자 및 테스트 로그인 세션을 사용합니다.
 - 프론트엔드 브라우저와의 실제 통합. 기존 데모는 수정하지 않았으며 화면 QA는 하지 않았습니다.
-- 무료 호스팅 배포·계정 생성·HTTPS·프록시·CORS 구성. 배포 작업은 별도 공동 단계입니다.
+- Render·Neon 실제 계정에서의 배포와 Google 로그인 콜백. 절차는 [배포 문서](deploy.md)에 있습니다. 다른 도메인 프론트를 위한 CORS는 열지 않았습니다.
 - 여러 서버/프로세스의 실시간 전달. 현재는 한 Daphne 프로세스의 메모리 채널입니다.
 - 퇴실 누락 보정, 자동 보존기간·회원 탈퇴 정책, 일정 목적별 통계 담당 결정.
 

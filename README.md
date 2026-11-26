@@ -96,7 +96,8 @@ DB 환경 변수에 따라 해당 엔진을 사용합니다. SQLite에서는 Pos
 - [API·WebSocket 명세 및 응답 예시](docs/api.md)
 - [A 연동 계약과 합의할 항목](docs/integration.md)
 - [검증 결과와 남은 제한](docs/validation.md)
+- [무료 배포 절차 (Render + Neon)](docs/deploy.md)
 
 가상환경, DB 파일, `.env`, 실제 비밀번호·토큰은 커밋하지 않습니다. 마이그레이션은 코드와 함께 커밋합니다. 기능 브랜치의 PR을 서로 검토한 후 병합합니다.
 
-배포·외부 서비스 가입·유료 API 연결은 수행하지 않았습니다. Render/Neon 무료 배포는 실제 진행 시 무료 조건을 다시 확인하는 별도 공동 작업입니다. AI 호출 없이 고정 더미 문구만 반환합니다.
+배포 설정은 `render.yaml`(Render 무료 웹 서비스)과 `DATABASE_URL`(Neon 무료 PostgreSQL)로 준비했습니다. 가입·대시보드 설정 절차와 무료 조건은 [배포 문서](docs/deploy.md)를 따릅니다. 유료 API는 연결하지 않았습니다. AI 호출 없이 고정 더미 문구만 반환합니다.

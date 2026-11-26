@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 
 from django.core.exceptions import ImproperlyConfigured
 
+from config.database_url import parse_database_url
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 # 기본값은 운영 모드입니다. 로컬 개발은 .env에 DJANGO_DEBUG=1을 넣습니다.
@@ -17,6 +19,10 @@ ALLOWED_HOSTS = [
     for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
     if host.strip()
 ]
+# Render가 자동으로 넣어 주는 서비스 주소(예: koss-room-backend.onrender.com).
+RENDER_EXTERNAL_HOSTNAME = os.getenv("RENDER_EXTERNAL_HOSTNAME", "").strip()
+if RENDER_EXTERNAL_HOSTNAME and RENDER_EXTERNAL_HOSTNAME not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 INSTALLED_APPS = [
     "daphne",
     "django.contrib.auth",
@@ -50,7 +56,11 @@ USE_TZ = True
 LANGUAGE_CODE = "ko-kr"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 DB_ENGINE = os.getenv("DB_ENGINE", "sqlite")
-if DB_ENGINE == "postgresql":
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+if DATABASE_URL:
+    # 배포(Neon 등): 연결 문자열 하나로 설정합니다. PG* 변수보다 우선합니다.
+    DATABASES = {"default": parse_database_url(DATABASE_URL)}
+elif DB_ENGINE == "postgresql":
     DATABASES = {"default": {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": os.environ["PGDATABASE"],
@@ -68,9 +78,17 @@ else:
 
 # 무료 로컬 MVP: HTTP + WebSocket을 같은 Daphne 프로세스 하나에서 실행해야 합니다.
 CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
-WS_ALLOWED_ORIGINS = os.getenv(
-    "WS_ALLOWED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000"
-).split(",")
+WS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "WS_ALLOWED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000"
+    ).split(",")
+    if origin.strip()
+]
+if RENDER_EXTERNAL_HOSTNAME:
+    render_origin = f"https://{RENDER_EXTERNAL_HOSTNAME}"
+    if render_origin not in WS_ALLOWED_ORIGINS:
+        WS_ALLOWED_ORIGINS.append(render_origin)
 CSRF_TRUSTED_ORIGINS = os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if os.getenv("CSRF_TRUSTED_ORIGINS") else []
 CSRF_FAILURE_VIEW = "common.http.csrf_failure"
 SESSION_COOKIE_HTTPONLY = True
