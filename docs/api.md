@@ -1,6 +1,6 @@
 # 백엔드 B API / WebSocket v1 제안
 
-Base path: `/api/`. WebSocket: `/ws/room/`. 경로 끝 `/`를 포함합니다. 로그인은 A 담당입니다. 모든 기능 API와 소켓은 활성 로그인 사용자의 Django 세션 쿠키가 필요합니다. `/api/csrf/`만 비로그인 접근을 허용합니다.
+Base path: `/api/`. WebSocket: `/ws/room/`. 경로 끝 `/`를 포함합니다. 로그인은 브라우저에서 `/accounts/google/login/`으로 이동합니다(국민대 Google 계정만). 모든 기능 API와 소켓은 활성 로그인 사용자의 Django 세션 쿠키가 필요합니다. `/api/csrf/`만 비로그인 접근을 허용합니다.
 
 ## 공통 규칙
 
@@ -12,6 +12,15 @@ Base path: `/api/`. WebSocket: `/ws/room/`. 경로 끝 `/`를 포함합니다. �
 - 기능 API 오류 예시: `{"error":{"code":"authentication_required","message":"로그인이 필요합니다."}}`. 잘못된 Host, 존재하지 않는 경로 등 프레임워크 오류는 JSON 계약에 포함하지 않습니다.
 - 예약 예상 인원·일정 참여 인원은 아래 현재 인원에 포함되지 않습니다.
 - 날짜는 `0001-01-02`~`9999-12-30` 범위입니다(날짜 경계 계산을 위한 양 끝 제외).
+
+## 내 계정
+
+| 메서드 | 경로 | 설명 |
+| --- | --- | --- |
+| GET | `/api/accounts/me/` | `{"id":"3","email":"...@kookmin.ac.kr","nickname":"..."}` |
+| PATCH | `/api/accounts/me/` | `{"nickname":"새 닉네임"}`, 1~30자, `X-CSRFToken` 필요. 응답은 GET과 같음 |
+
+공간(`/api/spaces/`)과 일정(`/api/schedules/`) API는 아직 이 문서에 정리되지 않았습니다. 경로는 각 앱의 `urls.py`를 참고합니다.
 
 ## 입퇴실
 
