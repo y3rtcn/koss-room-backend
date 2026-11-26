@@ -45,7 +45,7 @@ python manage.py runserver --noreload 127.0.0.1:8000
 
 HTTP와 WebSocket은 같은 서버에서 동작합니다. 현재 InMemory 채널 설정에서는 **Daphne 프로세스 하나**만 실행합니다. 별도 HTTP 서버/워커로 나누면 실시간 알림이 전달되지 않습니다. 재시작·연결 끊김은 퇴실을 의미하지 않습니다.
 
-현재 로그인 화면/API는 없습니다. 인증이 필요한 API가 `401`을 반환하는 것이 정상입니다(CSRF가 없는 POST는 먼저 `403`). A의 로그인 API를 연결한 뒤 브라우저에서 사용할 수 있습니다. 테스트는 Django 테스트 세션으로 로그인 이후 B 흐름을 검증합니다. 비밀번호 없는 데모 로그인은 추가하지 않았습니다.
+로그인은 Google 계정으로만 합니다. 브라우저에서 `/accounts/google/login/`으로 이동하면 되고, 국민대 계정(`@kookmin.ac.kr`)만 허용합니다. 로컬에서는 `.env`에 `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`이 있어야 합니다. 로그인 전에는 인증이 필요한 API가 `401`을 반환하는 것이 정상입니다(CSRF가 없는 POST는 먼저 `403`). 테스트는 Django 테스트 세션으로 로그인 이후 흐름을 검증합니다. 비밀번호 로그인과 데모 로그인은 없습니다.
 
 ## PostgreSQL 설정
 
