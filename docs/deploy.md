@@ -51,7 +51,7 @@ https://<서비스 주소>/accounts/google/login/callback/
 | `GET https://<서비스 주소>/api/csrf/` | `200`, `{"csrf_token":"..."}` |
 | `GET https://<서비스 주소>/api/attendance/me/` (비로그인) | `401`, `authentication_required` |
 | `http://`로 접속 | `https://`로 이동 |
-| 브라우저에서 `/accounts/google/login/` → 국민대 계정 로그인 | `/api/attendance/me/` JSON 표시 |
+| 브라우저에서 `/accounts/google/login/` → 국민대 계정 로그인 | 프론트 홈 `/`로 이동, `/api/accounts/me/` 200 |
 
 잠든 상태라면 첫 요청에 약 1분이 걸립니다. Render 대시보드의 **Logs**에서 시작 로그와 오류를 확인합니다.
 
