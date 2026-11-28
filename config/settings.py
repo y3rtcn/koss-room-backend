@@ -116,7 +116,8 @@ AUTHENTICATION_BACKENDS = [
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        # templates/: 프론트가 준비한 로그인 화면(allauth) 템플릿. 앱 기본 템플릿보다 우선합니다.
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -139,8 +140,11 @@ SOCIALACCOUNT_PROVIDERS = {
     },
 }
 
-LOGIN_REDIRECT_URL = "/api/attendance/me/"
-LOGOUT_REDIRECT_URL = "/accounts/login/"
+# 로그인·로그아웃 후 프론트 홈으로 돌아갑니다.
+LOGIN_REDIRECT_URL = "/"
+LOGOUT_REDIRECT_URL = "/"
+# 프론트 빌드 결과(npm run build의 dist/ 내용)를 두는 곳. config/frontend.py가 제공합니다.
+FRONTEND_DIST_DIR = BASE_DIR / "frontend_dist"
 SOCIALACCOUNT_ADAPTER = "accounts.adapters.KookminSocialAccountAdapter"
 SOCIALACCOUNT_ONLY = True
 SOCIALACCOUNT_AUTO_SIGNUP = True

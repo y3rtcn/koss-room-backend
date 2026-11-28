@@ -97,6 +97,8 @@ DB 환경 변수에 따라 해당 엔진을 사용합니다. SQLite에서는 Pos
 - [A 연동 계약과 합의할 항목](docs/integration.md)
 - [검증 결과와 남은 제한](docs/validation.md)
 - [무료 배포 절차 (Render + Neon)](docs/deploy.md)
+- [프론트 배포: 같은 주소에서 제공](docs/frontend-deploy.md)
+- [AI 분석 API 연결](docs/ai-integration.md)
 
 가상환경, DB 파일, `.env`, 실제 비밀번호·토큰은 커밋하지 않습니다. 마이그레이션은 코드와 함께 커밋합니다. 기능 브랜치의 PR을 서로 검토한 후 병합합니다.
 
